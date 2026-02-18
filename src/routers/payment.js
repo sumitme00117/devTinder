@@ -4,14 +4,15 @@ const razorpayInstance = require("../utils/razorpay");
 const { userAuth } = require("../middlewares/auth");
 const Payment = require("../models/payment");
 const { membershipAmount } = require("../utils/constants");
-const {validateWebhookSignature} = require('razorpay/dist/utils/razorpay-utils');
+const {
+  validateWebhookSignature,
+} = require("razorpay/dist/utils/razorpay-utils");
 const User = require("../models/user");
 
 paymentRouter.post("/payment/create", userAuth, async (req, res) => {
-
   try {
     const { membershipType } = req.body;
-    const {firstName, lastName, emailId} = req.user;
+    const { firstName, lastName, emailId } = req.user;
     const order = await razorpayInstance.orders.create({
       amount: membershipAmount[membershipType] * 100, // amount in the smallest currency unit (e.g., paise for INR)
       currency: "INR",
@@ -49,52 +50,51 @@ paymentRouter.post("/payment/create", userAuth, async (req, res) => {
 // webhook will be calling this api so we don't need userAuth
 
 paymentRouter.post("/payment/webhook", async (req, res) => {
+  try {
+    const webhookSignature = req.get("X-Razorpay-Signature");
 
-    try{
+    const isWebhookValid = validateWebhookSignature(
+      JSON.stringify(req.body),
+      webhookSignature,
+      process.env.RAZORPAY_WEBHOOK_SECRET,
+    );
 
-        const webhookSignature = req.headers['X-Razorpay-Signature'];
+    if (!isWebhookValid)
+      return res.status(400).json({ msg: "Invalid webhook signature" });
 
-        const isWebhookValid = validateWebhookSignature(
-            JSON.stringify(req.body),
-            webhookSignature,
-            process.env.RAZORPAY_WEBHOOK_SECRET,
-        );
+    // The webhook will send the event in req.body.event and we will update the db(update the user as premium) according to that.
 
-        if(!isWebhookValid) return res.status(400).json({msg: "Invalid webhook signature"});
+    const paymentDetails = req.body.payload.payment.entity;
 
-        // The webhook will send the event in req.body.event and we will update the db(update the user as premium) according to that.
+    const payment = await Payment.findOne({ orderId: paymentDetails.order_id });
 
-        const paymentDetails = req.body.payload.payment.entity;
+    if (!payment) return res.status(404).json({ msg: "Payment not found" });
 
-        const payment = await Payment.findOne({orderId: paymentDetails.order_id});
-        
-        if(!payment) return res.status(404).json({msg: "Payment not found"});
+    payment.status = paymentDetails.status;
+    await payment.save();
 
-        payment.status = paymentDetails.status;
-        await payment.save();
+    // Update the user as premium
 
-        // Update the user as premium
+    const user = await User.findOne({ _id: payment.userId });
 
-        const user = await User.findOne({_id: payment.userId});
+    if (!user) return res.status(404).json({ msg: "User not found" });
 
-        if(!user) return res.status(404).json({msg: "User not found"});
+    user.isPremium = true;
+    user.membershipType = payment.notes.membershipType;
+    await user.save();
 
-        user.isPremium = true;
-        user.membershipType = payment.notes.membershipType;
-        await user.save();
+    // Also we will send a response to razorpay that we have received the webhook and processed it successfully. Otherwise it will keep calling the api.
 
-        // Also we will send a response to razorpay that we have received the webhook and processed it successfully. Otherwise it will keep calling the api.
-
-        // if(req.body.event === "payment.captured"){
-        // }
-        // if(req.body.event === "payment.failed"){
-        // }
-        res.status(200).json({msg: "Webhook received and processed successfully"});
-    }
-    catch(err){
-        res.status(500).send("Error:" + err.message);
-    }
-
-})
+    // if(req.body.event === "payment.captured"){
+    // }
+    // if(req.body.event === "payment.failed"){
+    // }
+    res
+      .status(200)
+      .json({ msg: "Webhook received and processed successfully" });
+  } catch (err) {
+    res.status(500).send("Error:" + err.message);
+  }
+});
 
 module.exports = paymentRouter;
