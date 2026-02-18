@@ -9,6 +9,7 @@ const authRouter = require("./routers/auth");
 const profileRouter = require("./routers/profile");
 const requestRouter = require("./routers/request");
 const userRouter = require("./routers/user");
+const paymentRouter = require("./routers/payment");
 
 const app = express();
 app.use(express.json());
@@ -22,6 +23,7 @@ app.use("/", authRouter);
 app.use("/", profileRouter);
 app.use("/", requestRouter);
 app.use("/", userRouter);
+app.use("/", paymentRouter);
 
 
 
