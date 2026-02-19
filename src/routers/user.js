@@ -22,7 +22,7 @@ userRouter.get("/user/connections", userAuth, async (req, res) => {
     const connectionRequest = await ConnectionRequest.find({$or: [{fromUserId: user._id, status: "accepted"}, {toUserId: user._id, status: "accepted"}]}).populate("fromUserId", "firstName lastName photoUrl about skills").populate("toUserId", "firstName lastName photoUrl about skills");
 
     const data = connectionRequest.map(row => {
-        if(row.fromUserId.toString() == user._id.toString()) return row.toUserId
+        if(row.fromUserId._id.toString() == user._id.toString()) return row.toUserId
         return row.fromUserId
     })
 

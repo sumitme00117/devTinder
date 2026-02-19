@@ -3,13 +3,15 @@ const connectDB = require("./config/database");
 
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+const http = require("http");
 require("dotenv").config();
-
+const initializeSocket = require("./utils/socket");
 const authRouter = require("./routers/auth");
 const profileRouter = require("./routers/profile");
 const requestRouter = require("./routers/request");
 const userRouter = require("./routers/user");
 const paymentRouter = require("./routers/payment");
+const chatRouter = require("./routers/chat");
 
 const app = express();
 app.use(express.json());
@@ -24,19 +26,19 @@ app.use("/", profileRouter);
 app.use("/", requestRouter);
 app.use("/", userRouter);
 app.use("/", paymentRouter);
+app.use("/", chatRouter)
 
 
+const server = http.createServer(app);
 
-
-
-
+initializeSocket(server)
 
 
 
 connectDB()
   .then(() => {
     console.log("Database connection establised");
-    app.listen(process.env.PORT, () => {
+    server.listen(process.env.PORT, () => {
       console.log("Server is running on port " + process.env.PORT);
     });
   })
